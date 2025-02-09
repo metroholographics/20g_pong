@@ -1,0 +1,5 @@
+.cache
+compile_commands.json
+config.clangd
+format.clang-format
+main.exe
