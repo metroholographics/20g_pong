@@ -1,5 +1,7 @@
 to-do:
 ~ make moveable player paddle
-- draw background
-- set-up git for project
+~ draw background
+~ set-up git for project
 - set 120fps and make framerate independent
+- add paddle wall collision
+- create second player paddle
