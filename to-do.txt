@@ -5,9 +5,13 @@ to-do:
 ~ set 120fps and make framerate independent
 ~ add paddle wall collision
 ~ create second player paddle
-* ball spawn
-* make ball move
-* ball collision detection
-- ball collision physics
+~ ball spawn
+~ make ball move
+~ ball collision detection
+* stupid ball collision physics
+* set-up text rendering
+- fix text rendering
 - add scoring and display
+- add main menu
+- improve ball collision physics
 - fix movement code (velocity swap logic?)
