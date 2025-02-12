@@ -8,10 +8,11 @@ to-do:
 ~ ball spawn
 ~ make ball move
 ~ ball collision detection
-* stupid ball collision physics
-* set-up text rendering
-- fix text rendering
-- add scoring and display
-- add main menu
+~ stupid ball collision physics
+~ set-up text rendering
+* fix text rendering (good enough)
+* add scoring and display
+- improve function signatures
+- add play again screen
 - improve ball collision physics
 - fix movement code (velocity swap logic?)

@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define MAX_SCORE 11
+#define MAX_SCORE 3
 #define WIDTH 900
 #define HEIGHT 500
 #define PADDLE_WIDTH 20
@@ -20,7 +20,9 @@ typedef enum game_state {
     GAME_BALL_SPAWN,
     GAME_BALL_MOVING,
     GAME_BALL_HIT_WALL,
-    GAME_BALL_HIT_PADDLE
+    GAME_BALL_HIT_PADDLE,
+    GAME_BALL_OUT_LEFT,
+    GAME_BALL_OUT_RIGHT
 } Ball_State;
 
 typedef struct field {
@@ -57,11 +59,51 @@ SDL_Color green = {68, 157, 68, 255};
 SDL_Color white = {223, 240, 216, 255};
 SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;
-SDL_Texture* texture = NULL;
 TTF_Font* font = NULL;
 
+void reset_paddles() {
+    Paddle player = (Paddle) {
+        .shape    = (SDL_FRect) {.x = 10, .y = 100, .w = PADDLE_WIDTH, .h = PADDLE_HEIGHT},
+        .velocity = 0,
+        .score    = 0
+    };
+    
+    Paddle friend = (Paddle) {
+        .shape    = (SDL_FRect) {.x = WIDTH - 10 - PADDLE_WIDTH, .y = 100, .w = PADDLE_WIDTH, .h = PADDLE_HEIGHT},
+        .velocity = 0,
+        .score    = 0
+    };
 
-void update_paddles(Paddle* p, int paddle_count, double dt) {
+    paddles[0] = player;
+    paddles[1] = friend;
+}
+
+bool set_score_text(Text_Elements* ui, int paddle_id, int score) {
+    char buff[10];
+    char *num = itoa(score, buff, 10);
+    if (score > MAX_SCORE) {
+        memcpy(buff,"Error", sizeof("Error"));
+    }
+    
+    SDL_Surface* t = TTF_RenderText_Blended(font, num, 0, white);
+    if (t == NULL) {
+        printf("Error_surface: %s\n", SDL_GetError());
+        return false;
+    }
+    
+    ui->score_text[paddle_id] = SDL_CreateTextureFromSurface(renderer, t);
+    SDL_DestroySurface(t);
+    return true;
+}
+
+void reset_score_text(Text_Elements* ui) {
+    for (int i = 0; i < NUM_PADDLES; i++) {
+        set_score_text(ui, i, paddles[i].score);
+    }
+    
+}
+
+void update_paddles(Paddle* p, Text_Elements* ui, int paddle_count, double dt) {
     for (int i = 0; i < paddle_count; i++) {
         p[i].shape.y += p[i].velocity * PADDLE_SPEED * dt;
         if (p[i].shape.y <= field.borders[0].y + field.borders[0].h) {
@@ -70,7 +112,16 @@ void update_paddles(Paddle* p, int paddle_count, double dt) {
         if (p[i].shape.y >=field.borders[1].y - p[i].shape.h) {
             p[i].shape.y = field.borders[1].y - p[i].shape.h;
         }
+        
+        if (p[i].score > MAX_SCORE) {
+            reset_paddles();
+            reset_score_text(ui);
+            return;
+        }
+        
     }
+    //printf("paddles %d score %d paddles %d score %d\n ",0, paddles[0].score, 1, paddles[1].score );
+    
 }
 
 bool aabb_collision_rects(SDL_FRect a, SDL_FRect b) {
@@ -96,14 +147,26 @@ bool get_collision_and_state(Ball* b) {
         }      
     }
 
+    if (b->shape.x + b->shape.w < 0) {
+        b->state = GAME_BALL_OUT_LEFT;
+        return true;
+    }
+
+    if (b->shape.x > WIDTH) {
+        b->state = GAME_BALL_OUT_RIGHT;
+        return true;
+    }
+
     return false;
 }
 
-void update_text() {
-    
+
+
+void update_score(Paddle* p, Text_Elements* ui,  int id) {
+    set_score_text(ui, id, p[id].score);
 }
 
-void update_game(double dt) {
+void update_game(Text_Elements* ui, double dt) {
     if (ball.state == GAME_BALL_SPAWN) {
         ball.shape.x = (WIDTH * 0.5f) - (BALL_WIDTH * 0.5f);
         ball.shape.y = (HEIGHT * 0.5f) - (BALL_HEIGHT * 0.5f);
@@ -121,7 +184,7 @@ void update_game(double dt) {
         collider_ball.shape.x = new_x;
         collider_ball.shape.y = new_y;
         
-        if (get_collision_and_state(&collider_ball)){
+        if (get_collision_and_state(&collider_ball)) {
             switch (collider_ball.state) {
                 case GAME_BALL_HIT_WALL:
                     collider_ball.vel_y *= -1;
@@ -129,15 +192,24 @@ void update_game(double dt) {
                 case GAME_BALL_HIT_PADDLE:
                     collider_ball.vel_x *= -1;
                     break;
+                case GAME_BALL_OUT_RIGHT:
+                    paddles[0].score += 1;
+                    update_score(paddles, ui,  0);
+                    break;
+                case GAME_BALL_OUT_LEFT:
+                    paddles[1].score += 1;
+                    update_score(paddles, ui, 1);
+                    break;
                 default:
                     break;
             }
         }
         ball = collider_ball;
-        ball.state = GAME_BALL_MOVING;                          
+        ball.state = (ball.state == GAME_BALL_OUT_RIGHT || ball.state == GAME_BALL_OUT_LEFT) ? GAME_BALL_SPAWN : GAME_BALL_MOVING;                          
     }
-    
-    update_paddles(paddles, NUM_PADDLES, TARGET_DT);    
+
+        
+    update_paddles(paddles, ui, NUM_PADDLES, TARGET_DT);    
 }
 
 void draw_background(Field f) {
@@ -163,26 +235,13 @@ void draw_paddles(Paddle* p) {
     }
 }
 
-bool set_score_text(int score) {
-    char buff[10];
-    char *num = itoa(score, buff, 10);
-    if (score > MAX_SCORE) {
-        memcpy(buff,"Error", sizeof("Error"));
-    }
-    for (int i = 0; i < NUM_PADDLES; i++) {
-        SDL_Surface* t = TTF_RenderText_Blended(font, num, 0, white);
-        if (t == NULL) {
-            printf("Error_surface: %s\n", SDL_GetError());
-            return false;
-        }
-        text_ui.score_text[i] = SDL_CreateTextureFromSurface(renderer, t);
-        SDL_DestroySurface(t);
-    }
-    return true;
-}
 
 void draw_game_text() {
-   for (int i = 0; i < NUM_PADDLES; i++) {
+    for (int i = 0; i < NUM_PADDLES; i++) {
+        SDL_FRect dest;
+        SDL_GetTextureSize(text_ui.score_text[i], &dest.w, &dest.h);
+        text_ui.score_box[i].w = dest.w;
+        text_ui.score_box[i].h = dest.h;
         SDL_RenderTexture(renderer, text_ui.score_text[i], NULL, &text_ui.score_box[i]);    
     }
     
@@ -207,9 +266,7 @@ int main(int argc, char* argv[]) {
         return -1;
     }
     
-    SDL_Surface* text;
-
-    font = TTF_OpenFont(".\\fonts\\FiraCode-Bold.ttf", 60);
+    font = TTF_OpenFont(".\\fonts\\FiraCode-Bold.ttf", 36);
     if (!font) {
         printf("Error: %s\n", SDL_GetError());
         return -1;
@@ -221,21 +278,8 @@ int main(int argc, char* argv[]) {
             .middle_tile = (SDL_FRect) {.h = 5,.w = 5, .x = WIDTH * 0.5f - 2, .y = 10,}
         };
 
-    Paddle player = (Paddle) {
-        .shape    = (SDL_FRect) {.x = 10, .y = 100, .w = PADDLE_WIDTH, .h = PADDLE_HEIGHT},
-        .velocity = 0,
-        .score    = 0
-    };
+    reset_paddles();
     
-    Paddle friend = (Paddle) {
-        .shape    = (SDL_FRect) {.x = WIDTH - 10 - PADDLE_WIDTH, .y = 100, .w = PADDLE_WIDTH, .h = PADDLE_HEIGHT},
-        .velocity = 0,
-        .score    = 0
-    };
-
-    paddles[0] = player;
-    paddles[1] = friend;
-
     ball = (Ball) {
         .shape = (SDL_FRect) {.h = BALL_HEIGHT,.w = BALL_WIDTH,.x = WIDTH * 0.5f - (BALL_WIDTH * 0.5f), .y = HEIGHT * 0.5f - (BALL_HEIGHT * 0.5f)},
         .vel_x = 0,
@@ -250,7 +294,7 @@ int main(int argc, char* argv[]) {
         .score_box[1]  = (SDL_FRect) {.h = 30, .w = 50, .x = WIDTH - 50 - 15, .y = 20}   
      };
 
-     if (!set_score_text(0)) {
+     if (!set_score_text(&text_ui, 0, paddles[0].score || !set_score_text(&text_ui, 1, paddles[1].score))) {
          printf("Error setting score - abort\n");
          return -1;
      }    
@@ -312,7 +356,7 @@ int main(int argc, char* argv[]) {
         static double accumulator = 0.0;
         accumulator += delta_time / 1000.0;
         while (accumulator >= TARGET_DT) {
-            update_game(TARGET_DT);
+            update_game(&text_ui, TARGET_DT);
             accumulator -= TARGET_DT;   
         }
         
