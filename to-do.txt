@@ -10,9 +10,10 @@ to-do:
 ~ ball collision detection
 ~ stupid ball collision physics
 ~ set-up text rendering
-* fix text rendering (good enough)
-* add scoring and display
-- improve function signatures
-- add play again screen
+~ fix text rendering (good enough)
+~ add scoring and display
+* improve function signatures and organise code
+* add play again screen
+- address to-dos
 - improve ball collision physics
 - fix movement code (velocity swap logic?)
