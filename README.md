@@ -14,6 +14,6 @@ Next steps:
 - Refine paddle collision physics
 - Sounds
 
-C + SDL\
+C + SDL3 + SDL3_ttf\
 16 hours\
 13/02/25
