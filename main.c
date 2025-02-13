@@ -1,23 +1,25 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3_ttf/SDL_ttf.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
-#define MAX_SCORE 3
+#define MAX_SCORE 10
 
 #define WIDTH 900
 #define HEIGHT 500
 
 #define PADDLE_WIDTH 20
 #define PADDLE_HEIGHT 80
-#define PADDLE_SPEED 250
+#define PADDLE_SPEED 350
 #define NUM_PADDLES 2
 
 #define BALL_HEIGHT 15
 #define BALL_WIDTH 15
-#define BALL_MOVE_SPEED 600
-
+#define BALL_MOVE_SPEED 550
+#define MAX_BOUNCE_ANGLE (5 * 3.14159265358979323846) / 12
 #define TARGET_FPS 240
 #define TARGET_DT (1.0 / TARGET_FPS)
 
@@ -53,8 +55,8 @@ typedef struct Paddle {
 typedef struct Ball {
     SDL_FRect shape;
     Ball_State state;
-    int vel_x;
-    int vel_y;
+    double vel_x;
+    double vel_y;
     float dir_x;
     float dir_y;
 } Ball;
@@ -137,10 +139,8 @@ void reset_ball(Ball* b) {
         .shape = (SDL_FRect) {.h = BALL_HEIGHT, .w = BALL_WIDTH,
             .x = WIDTH * 0.5f - (BALL_WIDTH * 0.5f), .y = HEIGHT * 0.5f - (BALL_HEIGHT * 0.5f)},
         //::todo make the vel and dir values random
-        .vel_x = -1,
-        .vel_y = -1,
-        .dir_x = 0.5,
-        .dir_y = 0.5,
+        .vel_x = (1.0 - -1.0) * ((float)rand() / RAND_MAX) + -1.0,
+        .vel_y = (1.0 - -1.0) * ((float)rand() / RAND_MAX) + -1.0,
         .state = GAME_BALL_SPAWN   
     }; 
 }
@@ -199,6 +199,15 @@ bool get_collision_and_state(Ball* b) {
     for (int i = 0; i < NUM_PADDLES; i++) {
         if (aabb_collision_rects(b->shape, paddles[i].shape)) {
             b->state = GAME_BALL_HIT_PADDLE;
+            double relative_I = (paddles[i].shape.y + (PADDLE_HEIGHT * 0.5)) - b->shape.y;
+            double normalized_relative_I = (relative_I / (PADDLE_HEIGHT * 0.5f));
+            if (normalized_relative_I > 1.0f) normalized_relative_I = 1.0f;
+            if (normalized_relative_I < -1.0f) normalized_relative_I = -1.0f;
+            double bounce_angle = normalized_relative_I * MAX_BOUNCE_ANGLE;
+            printf("Bounce: %lf ", bounce_angle);
+            b->vel_x = (i == 0) ? cos(bounce_angle) : -cos(bounce_angle);
+            b->vel_y = (i == 0) ? -sin(bounce_angle): sin(bounce_angle);
+            printf("x %lf, y %lf\n", b->vel_x, b->vel_y);
             return true;
         }      
     }
@@ -224,13 +233,14 @@ void update_score(Paddle* p, Text_Elements* ui,  int id) {
 void update_paddles(Paddle* p, Text_Elements* ui, int paddle_count, double dt) {
     for (int i = 0; i < paddle_count; i++) {
         if (p[i].score > MAX_SCORE) {
-                    reset_paddles(p);
-                    reset_score_text(ui, p, NUM_PADDLES);
-                    game.state = MENU;
-                    return;
+            reset_paddles(p);
+            reset_score_text(ui, p, NUM_PADDLES);
+            game.state = MENU;
+            return;
         }
         
         p[i].shape.y += p[i].velocity * PADDLE_SPEED * dt;
+        
         if (p[i].shape.y <= field.borders[0].y + field.borders[0].h) {
             p[i].shape.y = field.borders[0].y + field.borders[0].h;
         }
@@ -247,8 +257,8 @@ void update_game(Text_Elements* ui, Paddle* p, Ball* b,  double dt) {
     } else if (b->state == GAME_BALL_MOVING) {
         float new_x = b->shape.x;
         float new_y = b->shape.y;
-        new_x += (b->vel_x * b->dir_x) * BALL_MOVE_SPEED * dt;
-        new_y += (b->vel_y * b->dir_y) * BALL_MOVE_SPEED * dt;
+        new_x += (b->vel_x) * BALL_MOVE_SPEED * dt;
+        new_y += (b->vel_y) * BALL_MOVE_SPEED * dt;
         Ball collider_ball = *b;
         collider_ball.shape.x = new_x;
         collider_ball.shape.y = new_y;
@@ -256,13 +266,14 @@ void update_game(Text_Elements* ui, Paddle* p, Ball* b,  double dt) {
             switch (collider_ball.state) {
                 case GAME_BALL_HIT_WALL:
                     collider_ball.vel_y *= -1;
+                    collider_ball.vel_x = (collider_ball.vel_x > 0) ? 0.8 : -0.8;
                     break;
                 case GAME_BALL_HIT_PADDLE:
-                    collider_ball.vel_x *= -1;
+                   // collider_ball.vel_x *= -1;
                     break;
                 case GAME_BALL_OUT_RIGHT:
                     p[0].score += 1;
-                    update_score(paddles, ui,  0);
+                    update_score(paddles, ui, 0);
                     break;
                 case GAME_BALL_OUT_LEFT:
                     p[1].score += 1;
@@ -318,10 +329,8 @@ void draw_game_text() {
         dest.y = text_ui.menu_box.y + ((text_ui.menu_box.h - dest.h) / 2);
         SDL_SetRenderDrawColor(renderer,10, 10, 10, 100);
         SDL_RenderFillRect(renderer, &text_ui.menu_box);
-        SDL_SetRenderDrawColor(renderer, 10,10,10,255);
-        SDL_RenderTexture(renderer, text_ui.menu_text, NULL, &dest);
-        // SDL_RenderFillRect(renderer, &dest);
-        
+        SDL_SetRenderDrawColor(renderer, colour_white.r, colour_white.g, colour_white.b, colour_white.a);
+        SDL_RenderTexture(renderer, text_ui.menu_text, NULL, &dest);               
     }
 }
 
@@ -330,13 +339,13 @@ void make_menu(Text_Elements* ui) {
     if (s) {
         ui->menu_text = SDL_CreateTextureFromSurface(renderer, s);
         SDL_DestroySurface(s);
-    }
-
-    
+    }  
 }
 
 int main(int argc, char* argv[]) {
     (void)argc; (void)argv;
+
+    srand(time(NULL));
    
     if (!initialise_sdl(&window, &renderer, &font)) {
         printf("Aborting!\n");
@@ -431,9 +440,7 @@ int main(int argc, char* argv[]) {
             }
             accumulator -= TARGET_DT;   
         }
-            
-        
-        
+                
         SDL_SetRenderDrawColor(renderer, colour_green.r, colour_green.g, colour_green.b, colour_green.a);
         SDL_RenderClear(renderer);
         

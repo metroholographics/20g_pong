@@ -12,8 +12,8 @@ to-do:
 ~ set-up text rendering
 ~ fix text rendering (good enough)
 ~ add scoring and display
-* improve function signatures and organise code
-* add play again screen
-- address to-dos
-- improve ball collision physics
-- fix movement code (velocity swap logic?)
+~ improve function signatures and organise code
+~ add play again screen
+~ improve ball collision physics
+~ make random spawn
+
